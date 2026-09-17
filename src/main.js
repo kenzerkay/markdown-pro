@@ -1,3 +1,7 @@
+const ComponentRelay = require('@standardnotes/component-relay');
+const EasyMDE = require('easymde');
+const katex = require('katex');
+
 document.addEventListener('DOMContentLoaded', function () {
 
   let workingNote;
@@ -23,7 +27,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (note.uuid !== lastUUID) {
-      // Note changed, reset last values
       lastValue = null;
       initialLoad = true;
       lastUUID = note.uuid;
@@ -32,7 +35,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     workingNote = note;
 
-    // Only update UI on non-metadata updates.
     if (note.isMetadataUpdate || !window.easymde) {
       return;
     }
@@ -43,13 +45,17 @@ document.addEventListener('DOMContentLoaded', function () {
     );
 
     const isUnsafeContent = checkIfUnsafeContent(note.content.text);
+
     if (isUnsafeContent) {
       const trustUnsafeContent = clientData['trustUnsafeContent'] ?? false;
+
       if (!trustUnsafeContent) {
         const result = await showUnsafeContentAlert();
+
         if (result) {
           setTrustUnsafeContent(workingNote);
         }
+
         renderNote = result;
       } else {
         renderNote = true;
@@ -58,15 +64,13 @@ document.addEventListener('DOMContentLoaded', function () {
       renderNote = true;
     }
 
-    /**
-     * If the user decides not to continue rendering the note,
-     * clear the editor and disable it.
-     */
     if (!renderNote) {
       window.easymde.value('');
+
       if (!window.easymde.isPreviewActive()) {
         window.easymde.togglePreview();
       }
+
       return;
     }
 
@@ -79,9 +83,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (initialLoad) {
       initialLoad = false;
       window.easymde.codemirror.getDoc().clearHistory();
+
       const mode = clientData && clientData.mode;
 
-      // Set initial editor mode
       if (mode === 'preview') {
         if (!window.easymde.isPreviewActive()) {
           window.easymde.togglePreview();
@@ -90,12 +94,98 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!window.easymde.isSideBySideActive()) {
           window.easymde.toggleSideBySide();
         }
-        // falback config
       } else if (window.easymde.isPreviewActive()) {
         window.easymde.togglePreview();
       }
     }
   });
+
+  /**
+   * Render LaTeX math using KaTeX.
+   *
+   * Supports:
+   *   $inline$
+   *   $$display$$
+   *
+   * Math inside <code> or <pre> elements is ignored.
+   */
+  function renderMath(html) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT
+    );
+
+    const textNodes = [];
+    let node;
+
+    while ((node = walker.nextNode())) {
+      if (
+        node.parentElement &&
+        !node.parentElement.closest('code, pre')
+      ) {
+        textNodes.push(node);
+      }
+    }
+
+    textNodes.forEach((textNode) => {
+      const text = textNode.nodeValue;
+
+      const mathRegex = /(\$\$([\s\S]*?)\$\$)|(\$([^\$\n]+?)\$)/g;
+
+      if (!mathRegex.test(text)) {
+        return;
+      }
+
+      mathRegex.lastIndex = 0;
+
+      const fragment = document.createDocumentFragment();
+      let lastIndex = 0;
+      let match;
+
+      while ((match = mathRegex.exec(text)) !== null) {
+        fragment.appendChild(
+          document.createTextNode(
+            text.substring(lastIndex, match.index)
+          )
+        );
+
+        const isDisplayMath = Boolean(match[1]);
+        const math = isDisplayMath ? match[2] : match[4];
+
+        const mathElement = document.createElement(
+          isDisplayMath ? 'div' : 'span'
+        );
+
+        try {
+          katex.render(math, mathElement, {
+            displayMode: isDisplayMath,
+            throwOnError: false
+          });
+
+          fragment.appendChild(mathElement);
+        } catch (error) {
+          fragment.appendChild(
+            document.createTextNode(match[0])
+          );
+        }
+
+        lastIndex = mathRegex.lastIndex;
+      }
+
+      fragment.appendChild(
+        document.createTextNode(
+          text.substring(lastIndex)
+        )
+      );
+
+      textNode.parentNode.replaceChild(fragment, textNode);
+    });
+
+    return container.innerHTML;
+  }
 
   function initializeEditor() {
     window.easymde = new EasyMDE({
@@ -105,13 +195,22 @@ document.addEventListener('DOMContentLoaded', function () {
       nativeSpellcheck: true,
       inputStyle: getInputStyleForEnvironment(),
       status: false,
+
+      previewRender: function (plainText) {
+        const marked = require('marked');
+
+        const html = marked(plainText, {
+          headerIds: false,
+          smartypants: true
+        });
+
+        return renderMath(html);
+      },
+
       shortcuts: {
         toggleSideBySide: 'Cmd-Alt-P'
       },
-      // Syntax highlighting is disabled until we figure out performance issue: https://github.com/sn-extensions/advanced-markdown-editor/pull/20#issuecomment-513811633
-      // renderingConfig: {
-      //   codeSyntaxHighlighting: true
-      // },
+
       toolbar: [
         {
           className: 'fa fa-eye',
@@ -146,11 +245,6 @@ document.addEventListener('DOMContentLoaded', function () {
       ],
     });
 
-    /**
-     * Can be set to Infinity to make sure the whole document is always rendered,
-     * and thus the browser's text search works on it. This will have bad effects
-     * on performance of big documents.Really bad performance on Safari. Unusable.
-     */
     window.easymde.codemirror.setOption('viewportMargin', 100);
 
     window.easymde.codemirror.on('change', function () {
@@ -170,15 +264,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (!ignoreTextChange && renderNote) {
         if (workingNote) {
-          // Be sure to capture this object as a variable, as this.note may be reassigned in `streamContextItem`, so by the time
-          // you modify it in the presave block, it may not be the same object anymore, so the presave values will not be applied to
-          // the right object, and it will save incorrectly.
           const note = workingNote;
 
           componentRelay.saveItemWithPresave(note, () => {
             lastValue = window.easymde.value();
 
-            let html = window.easymde.options.previewRender(window.easymde.value());
+            let html = window.easymde.options.previewRender(
+              window.easymde.value()
+            );
+
             let strippedHtml = truncateString(strip(html));
 
             note.content.preview_plain = strippedHtml;
@@ -189,11 +283,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-    /**
-     * Scrolls the cursor into view, so the soft keyboard on mobile devices
-     * doesn't overlap the cursor. A short delay is added to prevent scrolling
-     * before the keyboard is shown.
-     */
     const scrollCursorIntoView = (editor) => {
       setTimeout(() => editor.scrollIntoView(), 200);
     };
@@ -202,10 +291,10 @@ document.addEventListener('DOMContentLoaded', function () {
       if (componentRelay.environment !== 'mobile') {
         return;
       }
+
       scrollCursorIntoView(editor);
     });
 
-    // Some sort of issue on Mobile RN where this causes an exception (".className is not defined")
     try {
       window.easymde.toggleFullScreen();
     } catch (e) {
@@ -225,6 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (editor.isPreviewActive()) return 'preview';
         if (editor.isSideBySideActive()) return 'split';
       }
+
       return 'edit';
     };
 
@@ -254,22 +344,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const marked = require('marked');
     const DOMPurify = require('dompurify');
 
-    /**
-     * Using marked to get the resulting HTML string from the markdown text.
-     */
     const renderedHtml = marked(markdownText, {
       headerIds: false,
       smartypants: true
     });
 
     const sanitizedHtml = DOMPurify.sanitize(renderedHtml, {
-      /**
-       * We don't need script or style tags.
-       */
       FORBID_TAGS: ['script', 'style'],
-      /**
-       * XSS payloads can be injected via these attributes.
-       */
+
       FORBID_ATTR: [
         'onerror',
         'onload',
@@ -293,14 +375,16 @@ document.addEventListener('DOMContentLoaded', function () {
       ]
     });
 
-    /**
-     * Create documents from both the sanitized string and the rendered string.
-     * This will allow us to compare them, and if they are not equal
-     * (i.e: do not contain the same properties, attributes, inner text, etc)
-     * it means something was stripped.
-     */
-    const renderedDom = new DOMParser().parseFromString(renderedHtml, 'text/html');
-    const sanitizedDom = new DOMParser().parseFromString(sanitizedHtml, 'text/html');
+    const renderedDom = new DOMParser().parseFromString(
+      renderedHtml,
+      'text/html'
+    );
+
+    const sanitizedDom = new DOMParser().parseFromString(
+      sanitizedHtml,
+      'text/html'
+    );
+
     return !renderedDom.isEqualNode(sanitizedDom);
   }
 
@@ -317,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     return new Promise((resolve) => {
       const Stylekit = require('sn-stylekit');
+
       const alert = new Stylekit.SKAlert({
         title: null,
         text,
@@ -339,6 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
           },
         ]
       });
+
       alert.present();
     });
   }

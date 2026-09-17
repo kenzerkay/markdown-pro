@@ -15,7 +15,9 @@
     "lint": "eslint src --ext .js",
     "lint:fix": "yarn lint --fix"
   },
-  "dependencies": {},
+  "dependencies": {
+    "katex": "^0.18.7"
+  },
   "devDependencies": {
     "@babel/cli": "^7.13.10",
     "@babel/core": "^7.13.13",

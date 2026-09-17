@@ -1,3 +1,4 @@
+@import "~katex/dist/katex.min.css";
 @import 'font-awesome/css/font-awesome.css';
 
 body, html {
@@ -30,7 +31,7 @@ body, html {
 .editor-toolbar, .editor-toolbar.fullscreen {
   background-color: var(--sn-stylekit-contrast-background-color);
   border-bottom: 1px solid var(--sn-stylekit-border-color);
-  overflow: visible; // on windows, if window is too small, horizontal scrollbar will appear fixed without this
+  overflow: visible;
 
   &::before, &::after {
     background: none !important;
@@ -62,6 +63,7 @@ body, html {
   @media screen and (max-width: 525px) {
     height: 80px !important;
   }
+
   @media screen and (min-width: 526px) {
     height: 50px !important;
   }
@@ -76,14 +78,17 @@ body, html {
         min-height: unset !important;
       }
     }
+
     @media screen and (min-width: 526px) {
       top: 50px !important;
     }
   }
+
   .editor-preview-side {
     @media screen and (max-width: 525px) {
       top: 80px !important;
     }
+
     @media screen and (min-width: 526px) {
       top: 50px !important;
     }
@@ -175,7 +180,7 @@ body, html {
     background: var(--sn-stylekit-contrast-background-color);
     color: var(--sn-stylekit-info-color);
     font-family: Consolas,monaco,"Ubuntu Mono",courier,monospace!important;
-    font-size: 90%; // font-family makes font look a bit big
+    font-size: 90%;
 
     &.CodeMirror-selectedtext {
       color: var(--sn-stylekit-info-contrast-color) !important;
@@ -185,13 +190,13 @@ body, html {
 
   .cm-header {
     color: var(--sn-stylekit-editor-foreground-color);
+
     &.CodeMirror-selectedtext {
       color: var(--sn-stylekit-info-contrast-color) !important;
-      background: var(--sn-stylekit-info-color) !important;;
+      background: var(--sn-stylekit-info-color) !important;
     }
   }
 
-  // Faded Markdown syntax
   .cm-formatting-header, .cm-formatting-strong, .cm-formatting-em {
     opacity: 0.2;
   }
@@ -202,7 +207,7 @@ body, html {
 
       &.CodeMirror-selectedtext {
         color: var(--sn-stylekit-info-contrast-color) !important;
-        background: var(--sn-stylekit-info-color) !important;;
+        background: var(--sn-stylekit-info-color) !important;
       }
     }
   }
@@ -216,14 +221,13 @@ body, html {
 
     &.CodeMirror-selectedtext {
       color: var(--sn-stylekit-info-contrast-color) !important;
-      background: var(--sn-stylekit-info-color) !important;;
+      background: var(--sn-stylekit-info-color) !important;
     }
   }
 
   .CodeMirror-linenumber {
     color: gray !important;
   }
-
 }
 
 .CodeMirror-cursor {
@@ -245,7 +249,6 @@ body, html {
   border-color: var(--sn-stylekit-border-color) !important;
 }
 
-// remove built in simplemde rule
 @media only screen and (max-width: 700px) {
   .editor-toolbar a.no-mobile {
     display: inline-block;
@@ -336,4 +339,17 @@ body, html {
 
 .hljs-strong {
   font-weight: bold;
+}
+
+/*
+  KaTeX
+*/
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+.katex {
+  font-size: 1.05em;
 }
