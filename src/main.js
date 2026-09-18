@@ -405,6 +405,16 @@ document.addEventListener('DOMContentLoaded', function () {
           window.easymde.codemirror.replaceSelection(references.join('\n'));
         }).catch((error) => {
           console.error('Unable to paste image to Standard Notes Files:', error);
+
+          const message = error.message || String(error);
+
+          if (message.includes('Configure Standard Notes FileSafe')) {
+            window.alert(
+              'Image upload is unavailable because Standard Notes FileSafe is not configured.'
+            );
+          } else {
+            window.alert(`Unable to upload image to Standard Notes Files: ${message}`);
+          }
         });
       }
     );
