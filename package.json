@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "filesafe-js": "^1.0.5",
-    "katex": "^0.18.7"
+    "katex": "^0.18.7",
+    "standard-file-js": "^1.0.0-alpha.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.13.10",

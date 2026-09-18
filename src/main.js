@@ -355,45 +355,39 @@ document.addEventListener('DOMContentLoaded', function () {
       const reader = new FileReader();
 
       reader.onload = async () => {
+        const binary = new Uint8Array(reader.result);
+        let binaryString = '';
+
+        binary.forEach((byte) => {
+          binaryString += String.fromCharCode(byte);
+        });
+
+        const base64Data = btoa(binaryString);
+
         try {
-          const binary = new Uint8Array(reader.result);
-          let binaryString = '';
-
-          binary.forEach((byte) => {
-            binaryString += String.fromCharCode(byte);
+          const fileItem = await filesafe.encryptFile({
+            data: base64Data,
+            inputFileName: file.name || 'pasted-image',
+            fileType: file.type,
+            credential
           });
-
-          const base64Data = btoa(binaryString);
-          let fileItem;
-
-          try {
-            fileItem = await filesafe.encryptFile({
-              data: base64Data,
-              inputFileName: file.name || 'pasted-image',
-              fileType: file.type,
-              credential
-            });
-          } catch (error) {
-            throw new Error(`FileSafe encryption failed: ${error.message || error}`);
-          }
-
-          let descriptor;
-
-          try {
-            descriptor = await filesafe.uploadFile({
-              fileItem,
-              inputFileName: file.name || 'pasted-image',
-              fileType: file.type,
-              credential,
-              note: workingNote
-            });
-          } catch (error) {
-            throw new Error(`FileSafe upload failed: ${error.message || error}`);
-          }
+          const descriptor = await filesafe.uploadFile({
+            fileItem,
+            inputFileName: file.name || 'pasted-image',
+            fileType: file.type,
+            credential,
+            note: workingNote
+          });
 
           resolve(`![${file.name || 'pasted-image'}](sn-file:${descriptor.uuid})`);
         } catch (error) {
-          reject(error);
+          console.warn(
+            'FileSafe image upload failed; embedding the image in the note instead.',
+            error
+          );
+          resolve(
+            `![${file.name || 'pasted-image'}](data:${file.type};base64,${base64Data})`
+          );
         }
       };
 
