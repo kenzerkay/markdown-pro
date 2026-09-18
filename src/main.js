@@ -364,19 +364,32 @@ document.addEventListener('DOMContentLoaded', function () {
           });
 
           const base64Data = btoa(binaryString);
-          const fileItem = await filesafe.encryptFile({
-            data: base64Data,
-            inputFileName: file.name || 'pasted-image',
-            fileType: file.type,
-            credential
-          });
-          const descriptor = await filesafe.uploadFile({
-            fileItem,
-            inputFileName: file.name || 'pasted-image',
-            fileType: file.type,
-            credential,
-            note: workingNote
-          });
+          let fileItem;
+
+          try {
+            fileItem = await filesafe.encryptFile({
+              data: base64Data,
+              inputFileName: file.name || 'pasted-image',
+              fileType: file.type,
+              credential
+            });
+          } catch (error) {
+            throw new Error(`FileSafe encryption failed: ${error.message || error}`);
+          }
+
+          let descriptor;
+
+          try {
+            descriptor = await filesafe.uploadFile({
+              fileItem,
+              inputFileName: file.name || 'pasted-image',
+              fileType: file.type,
+              credential,
+              note: workingNote
+            });
+          } catch (error) {
+            throw new Error(`FileSafe upload failed: ${error.message || error}`);
+          }
 
           resolve(`![${file.name || 'pasted-image'}](sn-file:${descriptor.uuid})`);
         } catch (error) {
