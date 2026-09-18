@@ -301,19 +301,20 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!ignoreTextChange && renderNote) {
         if (workingNote) {
           const note = workingNote;
+          const editorValue = window.easymde.value();
+
+          lastValue = editorValue;
 
           componentRelay.saveItemWithPresave(note, () => {
-            lastValue = window.easymde.value();
-
             let html = window.easymde.options.previewRender(
-              window.easymde.value()
+              editorValue
             );
 
             let strippedHtml = truncateString(strip(html));
 
             note.content.preview_plain = strippedHtml;
             note.content.preview_html = null;
-            note.content.text = lastValue;
+            note.content.text = editorValue;
           });
         }
       }
