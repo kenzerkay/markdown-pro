@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
     textNodes.forEach((textNode) => {
       const text = textNode.nodeValue;
 
-      const mathRegex = /(\$\$([\s\S]*?)\$\$)|(\$([^\$\n]+?)\$)/g;
+      const mathRegex = /(\$\$([\s\S]*?)\$\$)|(\$([^$\n]+?)\$)/g;
 
       if (!mathRegex.test(text)) {
         return;
@@ -246,6 +246,42 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     window.easymde.codemirror.setOption('viewportMargin', 100);
+
+    window.easymde.codemirror.getInputField().addEventListener(
+      'paste',
+      function (event) {
+        const imageFiles = Array.from(
+          event.clipboardData?.files || []
+        ).filter((file) => file.type.startsWith('image/'));
+
+        if (imageFiles.length === 0) {
+          return;
+        }
+
+        event.preventDefault();
+
+        Promise.all(
+          imageFiles.map((file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = () => resolve({
+              name: file.name || 'pasted-image',
+              dataUrl: reader.result
+            });
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          }))
+        ).then((images) => {
+          const markdown = images.map((image) => {
+            return `![${image.name}](${image.dataUrl})`;
+          }).join('\n');
+
+          window.easymde.codemirror.replaceSelection(markdown);
+        }).catch((error) => {
+          console.error('Unable to paste image:', error);
+        });
+      }
+    );
 
     window.easymde.codemirror.on('change', function () {
       const strip = (html) => {
