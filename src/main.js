@@ -355,29 +355,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const reader = new FileReader();
 
       reader.onload = async () => {
-        const binary = new Uint8Array(reader.result);
-        let binaryString = '';
-
-        binary.forEach((byte) => {
-          binaryString += String.fromCharCode(byte);
-        });
-
-        const base64Data = btoa(binaryString);
-
         try {
-          const fileItem = await filesafe.encryptFile({
-            data: base64Data,
-            inputFileName: file.name || 'pasted-image',
-            fileType: file.type,
-            credential
-          });
-          const descriptor = await filesafe.uploadFile({
-            fileItem,
-            inputFileName: file.name || 'pasted-image',
-            fileType: file.type,
-            credential,
-            note: workingNote
-          });
+          const descriptor = await filesafe.encryptAndUploadJavaScriptFileObject(file);
 
           resolve(`![${file.name || 'pasted-image'}](sn-file:${descriptor.uuid})`);
         } catch (error) {
@@ -386,13 +365,13 @@ document.addEventListener('DOMContentLoaded', function () {
             error
           );
           resolve(
-            `![${file.name || 'pasted-image'}](data:${file.type};base64,${base64Data})`
+            `![${file.name || 'pasted-image'}](${reader.result})`
           );
         }
       };
 
       reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
+      reader.readAsDataURL(file);
     });
 
     window.easymde.codemirror.getInputField().addEventListener(
