@@ -74,7 +74,9 @@ self.addEventListener('message', async (event) => {
   } catch (error) {
     self.postMessage({
       error: {
-        message: error.message || String(error)
+        name: error.name,
+        message: error.message || String(error),
+        stack: error.stack
       }
     });
   }
