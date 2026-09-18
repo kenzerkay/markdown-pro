@@ -2679,6 +2679,11 @@
     "loader-utils" "^2.0.0"
     "schema-utils" "^3.0.0"
 
+"filesafe-js@^1.0.5":
+  "integrity" "sha512-AqYirPpw2kFr9tfYWbEfbpGJP/+9FS25mu+8xZjcmTgMP8xeLm8HjjFQYZ+aX1TgsvfP2+bAL8sMNHtjFiM9TQ=="
+  "resolved" "https://registry.npmjs.org/filesafe-js/-/filesafe-js-1.0.5.tgz"
+  "version" "1.0.5"
+
 "fill-range@^4.0.0":
   "integrity" "sha512-VcpLTWqWDiTerugjj8e3+esbg+skS3M9e54UuR3iCeIDMXCLTsAH8hTSzDQU/X6/6t3eYkOKoZSef2PlU6U1XQ=="
   "resolved" "https://registry.npmjs.org/fill-range/-/fill-range-4.0.0.tgz"

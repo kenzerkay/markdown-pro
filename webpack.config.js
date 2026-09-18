@@ -52,6 +52,7 @@ module.exports = {
         { from: "node_modules/easymde/dist/easymde.min.css", to: path.resolve(__dirname, "dist/vendor/easymd/easymde.css") },
         { from: "node_modules/highlightjs/highlight.pack.min.js", to: path.resolve(__dirname, "dist/vendor/highlightjs/highlightjs.js") },
         { from: "node_modules/@standardnotes/component-relay/dist/dist.js", to: path.resolve(__dirname, "dist/lib/component-relay.js") },
+        { from: "node_modules/filesafe-js/dist/filesafe-js/EncryptionWorker.js", to: path.resolve(__dirname, "dist/filesafe-js/EncryptionWorker.js") },
         { from: "node_modules/sn-stylekit/dist/stylekit.css", to: path.resolve(__dirname, "dist/stylekit.css") },
       ],
     }),

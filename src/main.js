@@ -1,5 +1,6 @@
 const ComponentRelay = require('@standardnotes/component-relay');
 const EasyMDE = require('easymde');
+const Filesafe = require('filesafe-js');
 const katex = require('katex');
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -10,6 +11,8 @@ document.addEventListener('DOMContentLoaded', function () {
   let lastValue, lastUUID, clientData;
   let renderNote = false;
   let showingUnsafeContentAlert = false;
+  const fileUrls = new Map();
+  const loadingFiles = new Set();
 
   const componentRelay = new ComponentRelay({
     targetWindow: window,
@@ -19,6 +22,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
       initializeEditor();
     }
+  });
+
+  const filesafe = new Filesafe({
+    componentManager: componentRelay
   });
 
   componentRelay.streamContextItem(async (note) => {
@@ -34,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     workingNote = note;
+    filesafe.setCurrentNote(note);
 
     if (note.isMetadataUpdate || !window.easymde) {
       return;
@@ -187,6 +195,93 @@ document.addEventListener('DOMContentLoaded', function () {
     return container.innerHTML;
   }
 
+  function normaliseFileReferences(markdown) {
+    return markdown.replace(
+      /!\[([^\]]*)\]\(sn-file:([^)]+)\)/g,
+      '![$1](https://standardnotes.invalid/files/$2)'
+    );
+  }
+
+  function renderFileReferences(html) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    container.querySelectorAll(
+      'img[src^="https://standardnotes.invalid/files/"]'
+    ).forEach((image) => {
+      const descriptorUUID = image.src.split('/').pop();
+      const fileUrl = fileUrls.get(descriptorUUID);
+
+      if (fileUrl) {
+        image.src = fileUrl;
+      } else {
+        image.removeAttribute('src');
+      }
+    });
+
+    return container.innerHTML;
+  }
+
+  async function loadFileReference(descriptorUUID) {
+    if (fileUrls.has(descriptorUUID) || loadingFiles.has(descriptorUUID)) {
+      return;
+    }
+
+    const descriptor = filesafe.findFileDescriptor(descriptorUUID);
+
+    if (!descriptor) {
+      return;
+    }
+
+    loadingFiles.add(descriptorUUID);
+
+    try {
+      const encryptedFile = await filesafe.downloadFileFromDescriptor(descriptor);
+      const decryptedFile = await filesafe.decryptFile({
+        fileDescriptor: descriptor,
+        fileItem: encryptedFile
+      });
+      const binary = atob(decryptedFile.decryptedData);
+      const bytes = Uint8Array.from(
+        binary,
+        (character) => character.charCodeAt(0)
+      );
+      const fileType = descriptor.content.fileType || 'application/octet-stream';
+
+      fileUrls.set(
+        descriptorUUID,
+        URL.createObjectURL(new Blob([bytes], { type: fileType }))
+      );
+
+      refreshPreview();
+    } catch (error) {
+      console.error('Unable to load Standard Notes file:', error);
+    } finally {
+      loadingFiles.delete(descriptorUUID);
+    }
+  }
+
+  function resolveFileReferences(markdown) {
+    const references = markdown.matchAll(
+      /!\[[^\]]*\]\(sn-file:([^)]+)\)/g
+    );
+
+    for (const reference of references) {
+      loadFileReference(reference[1]);
+    }
+  }
+
+  function refreshPreview() {
+    if (!window.easymde || !window.easymde.isPreviewActive()) {
+      return;
+    }
+
+    const preview = window.easymde.codemirror.getWrapperElement().lastChild;
+    preview.innerHTML = window.easymde.options.previewRender(
+      window.easymde.value()
+    );
+  }
+
   function initializeEditor() {
     window.easymde = new EasyMDE({
       element: document.getElementById('editor'),
@@ -199,12 +294,14 @@ document.addEventListener('DOMContentLoaded', function () {
       previewRender: function (plainText) {
         const marked = require('marked');
 
-        const html = marked(plainText, {
+        resolveFileReferences(plainText);
+
+        const html = marked(normaliseFileReferences(plainText), {
           headerIds: false,
           smartypants: true
         });
 
-        return renderMath(html);
+        return renderMath(renderFileReferences(html));
       },
 
       shortcuts: {
@@ -247,6 +344,50 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.easymde.codemirror.setOption('viewportMargin', 100);
 
+    const uploadImage = (file) => new Promise((resolve, reject) => {
+      const credential = filesafe.getDefaultCredentials();
+
+      if (!credential || !filesafe.getDefaultIntegration()) {
+        reject(new Error('Configure Standard Notes FileSafe before pasting images.'));
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        try {
+          const binary = new Uint8Array(reader.result);
+          let binaryString = '';
+
+          binary.forEach((byte) => {
+            binaryString += String.fromCharCode(byte);
+          });
+
+          const base64Data = btoa(binaryString);
+          const fileItem = await filesafe.encryptFile({
+            data: base64Data,
+            inputFileName: file.name || 'pasted-image',
+            fileType: file.type,
+            credential
+          });
+          const descriptor = await filesafe.uploadFile({
+            fileItem,
+            inputFileName: file.name || 'pasted-image',
+            fileType: file.type,
+            credential,
+            note: workingNote
+          });
+
+          resolve(`![${file.name || 'pasted-image'}](sn-file:${descriptor.uuid})`);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+
     window.easymde.codemirror.getInputField().addEventListener(
       'paste',
       function (event) {
@@ -260,25 +401,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         event.preventDefault();
 
-        Promise.all(
-          imageFiles.map((file) => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = () => resolve({
-              name: file.name || 'pasted-image',
-              dataUrl: reader.result
-            });
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          }))
-        ).then((images) => {
-          const markdown = images.map((image) => {
-            return `![${image.name}](${image.dataUrl})`;
-          }).join('\n');
-
-          window.easymde.codemirror.replaceSelection(markdown);
+        Promise.all(imageFiles.map(uploadImage)).then((references) => {
+          window.easymde.codemirror.replaceSelection(references.join('\n'));
         }).catch((error) => {
-          console.error('Unable to paste image:', error);
+          console.error('Unable to paste image to Standard Notes Files:', error);
         });
       }
     );
@@ -381,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const marked = require('marked');
     const DOMPurify = require('dompurify');
 
-    const renderedHtml = marked(markdownText, {
+    const renderedHtml = marked(normaliseFileReferences(markdownText), {
       headerIds: false,
       smartypants: true
     });
